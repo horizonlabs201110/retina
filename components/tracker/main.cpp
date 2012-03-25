@@ -1,36 +1,29 @@
-/****************************************************************************
-*                                                                           *
-*  OpenNI 1.x Alpha                                                         *
-*  Copyright (C) 2011 PrimeSense Ltd.                                       *
-*                                                                           *
-*  This file is part of OpenNI.                                             *
-*                                                                           *
-*  OpenNI is free software: you can redistribute it and/or modify           *
-*  it under the terms of the GNU Lesser General Public License as published *
-*  by the Free Software Foundation, either version 3 of the License, or     *
-*  (at your option) any later version.                                      *
-*                                                                           *
-*  OpenNI is distributed in the hope that it will be useful,                *
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of           *
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the             *
-*  GNU Lesser General Public License for more details.                      *
-*                                                                           *
-*  You should have received a copy of the GNU Lesser General Public License *
-*  along with OpenNI. If not, see <http://www.gnu.org/licenses/>.           *
-*                                                                           *
-****************************************************************************/
-//---------------------------------------------------------------------------
-// Includes
-//---------------------------------------------------------------------------
+
 #include <XnOpenNI.h>
 #include <XnCodecIDs.h>
 #include <XnCppWrapper.h>
-#include "scenedrawer.h"
 #include <XnPropNames.h>
+#include <gl/glut.h>
+#include <simpleini/SimpleIni.h>
+#include <windows.h>
+#include <tchar.h>
+#include <Rpc.h>
+#include "scenedrawer.h"
 
-//---------------------------------------------------------------------------
-// Globals
-//---------------------------------------------------------------------------
+#define GL_WIN_SIZE_X 720
+#define GL_WIN_SIZE_Y 480
+
+#define XN_CALIBRATION_FILE_NAME "UserCalibration.bin"
+#define SAMPLE_XML_PATH "openni.xml"
+#define INI_FILE "tracker.ini"
+
+#define CHECK_RC(nRetVal, what)										\
+	if (nRetVal != XN_STATUS_OK)									\
+	{																\
+		printf("%s failed: %s\n", what, xnGetStatusString(nRetVal));\
+		return nRetVal;												\
+	}
+
 xn::Context g_Context;
 xn::ScriptNode g_scriptNode;
 xn::DepthGenerator g_DepthGenerator;
@@ -45,33 +38,49 @@ XnBool g_bDrawSkeleton = TRUE;
 XnBool g_bPrintID = TRUE;
 XnBool g_bPrintState = TRUE;
 
-#ifndef USE_GLES
-#if (XN_PLATFORM == XN_PLATFORM_MACOSX)
-	#include <glut/glut.h>
-#else
-	#include <gl/glut.h>
-#endif
-#else
-	#include "opengles.h"
-#endif
-
-#ifdef USE_GLES
-static EGLDisplay display = EGL_NO_DISPLAY;
-static EGLSurface surface = EGL_NO_SURFACE;
-static EGLContext context = EGL_NO_CONTEXT;
-#endif
-
-#define GL_WIN_SIZE_X 720
-#define GL_WIN_SIZE_Y 480
-
 XnBool g_bPause = false;
 XnBool g_bRecord = false;
 
 XnBool g_bQuit = false;
 
-//---------------------------------------------------------------------------
-// Code
-//---------------------------------------------------------------------------
+WORD g_UserInkey = L'1';
+WORD g_UserOutkey = L'2';
+const char * g_StatFile = NULL;
+
+typedef struct _USER_PROFILE
+{
+    UUID ID;
+	DWORD InTick;
+	DWORD OutTick;
+	_USER_PROFILE* Next;
+} USER_PROFILE, *PUSER_PROFILE;
+
+USER_PROFILE g_CurrentUsers[100];
+PUSER_PROFILE g_pUsers;
+
+void sendKey(WORD key)
+{
+	INPUT input[2]; 
+
+    input[0].type = INPUT_KEYBOARD; 
+    input[0].ki.wVk = 0; 
+    input[0].ki.wScan = key;
+    input[0].ki.dwFlags = KEYEVENTF_UNICODE ; 
+    input[0].ki.time = 0; 
+    input[0].ki.dwExtraInfo = 0; 
+
+    input[1].type = INPUT_KEYBOARD; 
+    input[1].ki.wVk = 0; 
+    input[1].ki.wScan = key;
+    input[1].ki.dwFlags = KEYEVENTF_KEYUP  | KEYEVENTF_UNICODE ; 
+    input[1].ki.time = 0; 
+    input[1].ki.dwExtraInfo = 0; 
+
+    if (0 < SendInput(2, input, sizeof(INPUT)))
+    { 
+		printf("Key $s sent \n", key);
+    }
+}
 
 void CleanupExit()
 {
@@ -90,6 +99,8 @@ void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, v
 	XnUInt32 epochTime = 0;
 	xnOSGetEpochTime(&epochTime);
 	printf("%d New User %d\n", epochTime, nId);
+	sendKey(g_UserInkey);
+	        
 	// New user found
 	if (g_bNeedPose)
 	{
@@ -100,13 +111,16 @@ void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, v
 		g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE);
 	}
 }
+
 // Callback: An existing user was lost
 void XN_CALLBACK_TYPE User_LostUser(xn::UserGenerator& generator, XnUserID nId, void* pCookie)
 {
 	XnUInt32 epochTime = 0;
 	xnOSGetEpochTime(&epochTime);
 	printf("%d Lost user %d\n", epochTime, nId);	
+	sendKey(g_UserOutkey);
 }
+
 // Callback: Detected a pose
 void XN_CALLBACK_TYPE UserPose_PoseDetected(xn::PoseDetectionCapability& capability, const XnChar* strPose, XnUserID nId, void* pCookie)
 {
@@ -116,6 +130,7 @@ void XN_CALLBACK_TYPE UserPose_PoseDetected(xn::PoseDetectionCapability& capabil
 	g_UserGenerator.GetPoseDetectionCap().StopPoseDetection(nId);
 	g_UserGenerator.GetSkeletonCap().RequestCalibration(nId, TRUE);
 }
+
 // Callback: Started calibration
 void XN_CALLBACK_TYPE UserCalibration_CalibrationStart(xn::SkeletonCapability& capability, XnUserID nId, void* pCookie)
 {
@@ -123,6 +138,7 @@ void XN_CALLBACK_TYPE UserCalibration_CalibrationStart(xn::SkeletonCapability& c
 	xnOSGetEpochTime(&epochTime);
 	printf("%d Calibration started for user %d\n", epochTime, nId);
 }
+
 // Callback: Finished calibration
 void XN_CALLBACK_TYPE UserCalibration_CalibrationComplete(xn::SkeletonCapability& capability, XnUserID nId, XnCalibrationStatus eStatus, void* pCookie)
 {
@@ -154,8 +170,6 @@ void XN_CALLBACK_TYPE UserCalibration_CalibrationComplete(xn::SkeletonCapability
 	}
 }
 
-#define XN_CALIBRATION_FILE_NAME "UserCalibration.bin"
-
 // Save calibration to file
 void SaveCalibration()
 {
@@ -173,6 +187,7 @@ void SaveCalibration()
 		}
 	}
 }
+
 // Load calibration from file
 void LoadCalibration()
 {
@@ -230,12 +245,9 @@ void glutDisplay (void)
 		g_UserGenerator.GetUserPixels(0, sceneMD);
 		DrawDepthMap(depthMD, sceneMD);
 
-#ifndef USE_GLES
 	glutSwapBuffers();
-#endif
 }
 
-#ifndef USE_GLES
 void glutIdle (void)
 {
 	if (g_bQuit) {
@@ -283,6 +295,7 @@ void glutKeyboard (unsigned char key, int x, int y)
 		break;
 	}
 }
+
 void glInit (int * pargc, char ** argv)
 {
 	glutInit(pargc, argv);
@@ -302,20 +315,25 @@ void glInit (int * pargc, char ** argv)
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 }
-#endif // USE_GLES
-
-#define SAMPLE_XML_PATH "openni.xml"
-
-#define CHECK_RC(nRetVal, what)										\
-	if (nRetVal != XN_STATUS_OK)									\
-	{																\
-		printf("%s failed: %s\n", what, xnGetStatusString(nRetVal));\
-		return nRetVal;												\
-	}
 
 int main(int argc, char **argv)
 {
 	XnStatus nRetVal = XN_STATUS_OK;
+
+	CSimpleIniA ini;
+	ini.SetUnicode();
+	if (SI_Error::SI_OK != ini.LoadFile(INI_FILE))
+	{
+		printf("Fail to read tracker configuration \n");
+		return 1;
+	}
+	
+	g_StatFile = ini.GetValue("statistic", "output-file", NULL);
+	if (g_StatFile == NULL)
+	{
+		printf("Fail to read statistic output file configuration \n");
+		return 1;
+	}
 
 	if (argc > 1)
 	{
@@ -345,7 +363,7 @@ int main(int argc, char **argv)
 			return (nRetVal);
 		}
 	}
-
+	
 	nRetVal = g_Context.FindExistingNode(XN_NODE_TYPE_DEPTH, g_DepthGenerator);
 	if (nRetVal != XN_STATUS_OK)
 	{
@@ -422,28 +440,6 @@ int main(int argc, char **argv)
 	nRetVal = g_Context.StartGeneratingAll();
 	CHECK_RC(nRetVal, "StartGenerating");
 
-#ifndef USE_GLES
 	glInit(&argc, argv);
 	glutMainLoop();
-#else
-	if (!opengles_init(GL_WIN_SIZE_X, GL_WIN_SIZE_Y, &display, &surface, &context))
-	{
-		printf("Error initializing opengles\n");
-		CleanupExit();
-	}
-
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_TEXTURE_2D);
-	glEnableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-
-	while (!g_bQuit)
-	{
-		glutDisplay();
-		eglSwapBuffers(display, surface);
-	}
-	opengles_shutdown(display, surface, context);
-
-	CleanupExit();
-#endif
 }

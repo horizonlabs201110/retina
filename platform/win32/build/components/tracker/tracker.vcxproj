@@ -71,7 +71,8 @@
     </Link>
     <PostBuildEvent>
       <Command>copy ..\..\..\..\..\platform\win32\external\dll\glut32.dll $(TargetDir)\glut32.dll
-copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml</Command>
+copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml
+copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>
@@ -107,7 +108,8 @@ copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml</Command>
     </Link>
     <PostBuildEvent>
       <Command>copy ..\..\..\..\..\platform\win32\external\dll\glut32.dll $(TargetDir)\glut32.dll
-copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml</Command>
+copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml
+copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>
@@ -116,15 +118,15 @@ copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\components\tracker\main.cpp" />
-    <ClCompile Include="..\..\..\..\..\components\tracker\opengles.cpp" />
     <ClCompile Include="..\..\..\..\..\components\tracker\scenedrawer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\..\..\components\tracker\opengles.h" />
     <ClInclude Include="..\..\..\..\..\components\tracker\scenedrawer.h" />
     <ClInclude Include="..\..\res\resource.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\..\..\..\config\openni.xml" />
+    <None Include="..\..\..\..\..\config\tracker.ini" />
     <None Include="..\..\res\retina.ico" />
   </ItemGroup>
   <ItemGroup>
