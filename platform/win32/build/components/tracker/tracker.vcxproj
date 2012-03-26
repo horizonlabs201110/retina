@@ -53,16 +53,19 @@
       <MinimalRebuild>true</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
     </ClCompile>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(OPEN_NI_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>openNI.lib;glut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openNI.lib;glut32.lib;Rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OPEN_NI_LIB);..\..\..\..\..\external\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(TargetDir)$(TargetName).pdb</ProgramDatabaseFile>
@@ -72,7 +75,9 @@
     <PostBuildEvent>
       <Command>copy ..\..\..\..\..\platform\win32\external\dll\glut32.dll $(TargetDir)\glut32.dll
 copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml
-copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
+copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini
+copy ..\..\..\..\..\config\faast.cfg $(TargetDir)\faast.cfg
+copy ..\..\..\..\..\platform\win32\external\bin\faast.exe $(TargetDir)\faast.exe</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>
@@ -88,16 +93,19 @@ copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <PrecompiledHeader>
-      </PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>
+      </PrecompiledHeaderOutputFile>
     </ClCompile>
     <ResourceCompile>
       <AdditionalIncludeDirectories>$(OPEN_NI_INCLUDE);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>openNI.lib;glut32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>openNI.lib;glut32.lib;Rpcrt4.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OPEN_NI_LIB);..\..\..\..\..\external\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <ProgramDatabaseFile>$(TargetDir)$(TargetName).pdb</ProgramDatabaseFile>
@@ -109,7 +117,9 @@ copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
     <PostBuildEvent>
       <Command>copy ..\..\..\..\..\platform\win32\external\dll\glut32.dll $(TargetDir)\glut32.dll
 copy ..\..\..\..\..\config\openni.xml $(TargetDir)\openni.xml
-copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
+copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini
+copy ..\..\..\..\..\config\faast.cfg $(TargetDir)\faast.cfg
+copy ..\..\..\..\..\platform\win32\external\bin\faast.exe $(TargetDir)\faast.exe</Command>
     </PostBuildEvent>
     <PreBuildEvent>
       <Command>
@@ -118,10 +128,12 @@ copy ..\..\..\..\..\config\tracker.ini $(TargetDir)\tracker.ini</Command>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\components\tracker\main.cpp" />
+    <ClCompile Include="..\..\..\..\..\components\tracker\diagnostics.cpp" />
     <ClCompile Include="..\..\..\..\..\components\tracker\scenedrawer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\..\..\components\tracker\scenedrawer.h" />
+    <ClInclude Include="..\..\..\..\..\components\tracker\diagnostics.h" />
     <ClInclude Include="..\..\res\resource.h" />
   </ItemGroup>
   <ItemGroup>

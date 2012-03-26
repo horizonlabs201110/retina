@@ -1,7 +1,13 @@
 
-#include "SceneDrawer.h"
-
+#include <XnCppWrapper.h>
 #include <gl/glut.h>
+#include "scenedrawer.h"
+#include "diagnostics.h"
+#include <map>
+
+#define MAX_DEPTH 10000
+
+float g_pDepthHist[MAX_DEPTH];
 
 extern xn::UserGenerator g_UserGenerator;
 extern xn::DepthGenerator g_DepthGenerator;
@@ -12,19 +18,36 @@ extern XnBool g_bDrawSkeleton;
 extern XnBool g_bPrintID;
 extern XnBool g_bPrintState;
 
-#include <map>
 std::map<XnUInt32, std::pair<XnCalibrationStatus, XnPoseDetectionStatus> > m_Errors;
+GLfloat texcoords[8];
+XnFloat Colors[][3] =
+{
+	{0,1,1},
+	{0,0,1},
+	{0,1,0},
+	{1,1,0},
+	{1,0,0},
+	{1,.5,0},
+	{.5,1,0},
+	{0,.5,1},
+	{.5,0,1},
+	{1,1,.5},
+	{1,1,1}
+};
+XnUInt32 nColors = 10;
+
+
+
 void XN_CALLBACK_TYPE MyCalibrationInProgress(xn::SkeletonCapability& capability, XnUserID id, XnCalibrationStatus calibrationError, void* pCookie)
 {
 	m_Errors[id].first = calibrationError;
 }
+
 void XN_CALLBACK_TYPE MyPoseInProgress(xn::PoseDetectionCapability& capability, const XnChar* strPose, XnUserID id, XnPoseDetectionStatus poseError, void* pCookie)
 {
 	m_Errors[id].second = poseError;
 }
 
-#define MAX_DEPTH 10000
-float g_pDepthHist[MAX_DEPTH];
 unsigned int getClosestPowerOfTwo(unsigned int n)
 {
 	unsigned int m = 2;
@@ -32,6 +55,7 @@ unsigned int getClosestPowerOfTwo(unsigned int n)
 
 	return m;
 }
+
 GLuint initTexture(void** buf, int& width, int& height)
 {
 	GLuint texID = 0;
@@ -48,7 +72,6 @@ GLuint initTexture(void** buf, int& width, int& height)
 	return texID;
 }
 
-GLfloat texcoords[8];
 void DrawRectangle(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
 {
 	GLfloat verts[8] = {	topLeftX, topLeftY,
@@ -62,6 +85,7 @@ void DrawRectangle(float topLeftX, float topLeftY, float bottomRightX, float bot
 	//TODO: Maybe glFinish needed here instead - if there's some bad graphics crap
 	glFlush();
 }
+
 void DrawTexture(float topLeftX, float topLeftY, float bottomRightX, float bottomRightY)
 {
 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
@@ -72,22 +96,6 @@ void DrawTexture(float topLeftX, float topLeftY, float bottomRightX, float botto
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
-XnFloat Colors[][3] =
-{
-	{0,1,1},
-	{0,0,1},
-	{0,1,0},
-	{1,1,0},
-	{1,0,0},
-	{1,.5,0},
-	{.5,1,0},
-	{0,.5,1},
-	{.5,0,1},
-	{1,1,.5},
-	{1,1,1}
-};
-XnUInt32 nColors = 10;
-#ifndef USE_GLES
 void glPrintString(void *font, char *str)
 {
 	int i,l = strlen(str);
@@ -97,12 +105,12 @@ void glPrintString(void *font, char *str)
 		glutBitmapCharacter(font,*str++);
 	}
 }
-#endif
+
 void DrawLimb(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2)
 {
 	if (!g_UserGenerator.GetSkeletonCap().IsTracking(player))
 	{
-		printf("not tracked!\n");
+		Trace("not tracked!\n");
 		return;
 	}
 
@@ -120,15 +128,8 @@ void DrawLimb(XnUserID player, XnSkeletonJoint eJoint1, XnSkeletonJoint eJoint2)
 	pt[1] = joint2.position;
 
 	g_DepthGenerator.ConvertRealWorldToProjective(2, pt, pt);
-#ifndef USE_GLES
 	glVertex3i(pt[0].X, pt[0].Y, 0);
 	glVertex3i(pt[1].X, pt[1].Y, 0);
-#else
-	GLfloat verts[4] = {pt[0].X, pt[0].Y, pt[1].X, pt[1].Y};
-	glVertexPointer(2, GL_FLOAT, 0, verts);
-	glDrawArrays(GL_LINES, 0, 2);
-	glFlush();
-#endif
 }
 
 const XnChar* GetCalibrationErrorString(XnCalibrationStatus error)
@@ -157,6 +158,7 @@ const XnChar* GetCalibrationErrorString(XnCalibrationStatus error)
 		return "Unknown";
 	}
 }
+
 const XnChar* GetPoseErrorString(XnPoseDetectionStatus error)
 {
 	switch (error)
@@ -175,7 +177,6 @@ const XnChar* GetPoseErrorString(XnPoseDetectionStatus error)
 		return "Unknown";
 	}
 }
-
 
 void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 {
@@ -196,10 +197,10 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 		texWidth =  getClosestPowerOfTwo(dmd.XRes());
 		texHeight = getClosestPowerOfTwo(dmd.YRes());
 
-//		printf("Initializing depth texture: width = %d, height = %d\n", texWidth, texHeight);
+		//printf("Initializing depth texture: width = %d, height = %d\n", texWidth, texHeight);
 		depthTexID = initTexture((void**)&pDepthTexBuf,texWidth, texHeight) ;
 
-//		printf("Initialized depth texture: width = %d, height = %d\n", texWidth, texHeight);
+		//printf("Initialized depth texture: width = %d, height = %d\n", texWidth, texHeight);
 		bInitialized = true;
 
 		topLeftX = dmd.XRes();
@@ -319,7 +320,6 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 	g_UserGenerator.GetUsers(aUsers, nUsers);
 	for (int i = 0; i < nUsers; ++i)
 	{
-#ifndef USE_GLES
 		if (g_bPrintID)
 		{
 			XnPoint3D com;
@@ -354,12 +354,12 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 			glRasterPos2i(com.X, com.Y);
 			glPrintString(GLUT_BITMAP_HELVETICA_18, strLabel);
 		}
-#endif
+
 		if (g_bDrawSkeleton && g_UserGenerator.GetSkeletonCap().IsTracking(aUsers[i]))
 		{
-#ifndef USE_GLES
+
 			glBegin(GL_LINES);
-#endif
+
 			glColor4f(1-Colors[aUsers[i]%nColors][0], 1-Colors[aUsers[i]%nColors][1], 1-Colors[aUsers[i]%nColors][2], 1);
 			DrawLimb(aUsers[i], XN_SKEL_HEAD, XN_SKEL_NECK);
 
@@ -383,9 +383,9 @@ void DrawDepthMap(const xn::DepthMetaData& dmd, const xn::SceneMetaData& smd)
 			DrawLimb(aUsers[i], XN_SKEL_RIGHT_KNEE, XN_SKEL_RIGHT_FOOT);
 
 			DrawLimb(aUsers[i], XN_SKEL_LEFT_HIP, XN_SKEL_RIGHT_HIP);
-#ifndef USE_GLES
+
 			glEnd();
-#endif
+
 		}
 	}
 }
