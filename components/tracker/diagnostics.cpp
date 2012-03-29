@@ -3,13 +3,6 @@
 #include <stdarg.h>
 #include "diagnostics.h"
 
-/*
-void Trace(const char * msg, ...)
-{
-	printf(msg);
-}
-*/
-
 void Trace(const char *format, ...)
 {
 	va_list args;

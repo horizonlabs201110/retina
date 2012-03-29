@@ -1,18 +1,19 @@
 
+#include <windows.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <tchar.h>
+#include <Rpc.h>
+
 #include <XnOpenNI.h>
 #include <XnCodecIDs.h>
 #include <XnCppWrapper.h>
 #include <XnPropNames.h>
 #include <gl/glut.h>
 #include <simpleini/SimpleIni.h>
-#include <windows.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <tchar.h>
-#include <Rpc.h>
-#include "diagnostics.h"
 #include "scenedrawer.h"
-
+#include "diagnostics.h"
+#include "utilities.h"
 
 #define GL_WIN_SIZE_X 720
 #define GL_WIN_SIZE_Y 480
@@ -20,7 +21,8 @@
 #define CFG_OPENNI_XML "openni.xml"
 #define CFG_INI "tracker.ini"
 #define USER_TRACK_COUNT_MAX 100
-#define STATISTICS_TIMER_INTERVAL_SEC 1
+#define STATISTICS_TIMER_INTERVAL_SEC 5
+#define STATISTICS_FILE_NAME_MAX_COUNT 1024
 
 #define CHECK_RC(nRetVal, what)									\
 if (nRetVal != XN_STATUS_OK)									\
@@ -57,36 +59,15 @@ XnBool g_bRecord = false;
 XnBool g_bQuit = false;
 
 const char * g_strStatisticFile = NULL;
-WORD g_cUserInKey = L'1';
-WORD g_cUserOutKey = L'2';
+WORD g_cUserInKey;
+WORD g_cUserOutKey;
 UUID g_CurUsers[USER_TRACK_COUNT_MAX];
 PUSER_PROFILE g_pUser = NULL;
 UUID g_nilUUID;
 UINT_PTR g_nIDTimer;
 
-void SendKey(WORD key)
-{
-	INPUT input[2]; 
-
-    input[0].type = INPUT_KEYBOARD; 
-    input[0].ki.wVk = 0; 
-    input[0].ki.wScan = key;
-    input[0].ki.dwFlags = KEYEVENTF_UNICODE ; 
-    input[0].ki.time = 0; 
-    input[0].ki.dwExtraInfo = 0; 
-
-    input[1].type = INPUT_KEYBOARD; 
-    input[1].ki.wVk = 0; 
-    input[1].ki.wScan = key;
-    input[1].ki.dwFlags = KEYEVENTF_KEYUP  | KEYEVENTF_UNICODE ; 
-    input[1].ki.time = 0; 
-    input[1].ki.dwExtraInfo = 0; 
-
-    if (0 < SendInput(2, input, sizeof(INPUT)))
-    { 
-		Trace("Key %s sent \n", key);
-    }
-}
+WCHAR g_strStatFile[STATISTICS_FILE_NAME_MAX_COUNT];
+FILE *g_StatStream = NULL;
 
 // Callback: New user was detected
 void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, void* pCookie)
@@ -104,27 +85,26 @@ void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, v
 	}
 	else
 	{
-		
 		UUID uuid;
 		ZeroMemory(&uuid, sizeof(UUID));
 		UuidCreate(&uuid);
 		g_CurUsers[index] = uuid;
 
-		USER_PROFILE user;
-		ZeroMemory(&user, sizeof(USER_PROFILE));
-		user.ID = uuid;
-		user.InTick = GetTickCount();
-		user.OutTick = 0;
-		user.Next = NULL;
+		PUSER_PROFILE puser = (PUSER_PROFILE)malloc(sizeof(USER_PROFILE));
+		ZeroMemory(puser, sizeof(USER_PROFILE));
+		puser->ID = g_CurUsers[index];
+		puser->InTick = GetTickCount();
+		puser->OutTick = 0;
+		puser->Next = NULL;
 
 		if (g_pUser == NULL)
 		{
-			g_pUser = &user;
+			g_pUser = puser;
 		}
 		else
 		{
-			user.Next = g_pUser;
-			g_pUser = &user;
+			puser->Next = g_pUser;
+			g_pUser = puser;
 		}
 	}
 
@@ -183,6 +163,7 @@ void XN_CALLBACK_TYPE User_LostUser(xn::UserGenerator& generator, XnUserID nId, 
 			{
 				p->OutTick = GetTickCount();
 			}
+			g_CurUsers[index] = g_nilUUID;
 		}
 	}
 }
@@ -289,6 +270,12 @@ void CleanupExit()
 	if (g_nIDTimer != 0)
 	{
 		KillTimer(NULL, g_nIDTimer);
+	}
+
+	if (g_StatStream == NULL)
+	{
+		fclose(g_StatStream);
+		g_StatStream = NULL;
 	}
 
 	exit (1);
@@ -398,10 +385,39 @@ void glInit (int * pargc, char ** argv)
 void CALLBACK StatisticsTimerProc(HWND hwnd, UINT message, UINT idTimer, DWORD dwTime)
 {
 	Trace("Timer called, %d \n", dwTime);
-} 
+	
+	int userDetectedCount = 0;
+	int userInSceneCount = 0;
+
+	int averageTicks = 0;
+	int totalTicks = 0;
+	PUSER_PROFILE pUser = g_pUser;
+	while (pUser != NULL)
+	{
+		if (pUser->OutTick == 0)
+		{
+			userInSceneCount ++;
+		}
+		else
+		{
+			userDetectedCount ++;
+			totalTicks = totalTicks + pUser->OutTick - pUser->InTick;
+		}
+		pUser = pUser->Next;
+	}
+	//averageTicks = totalTicks / userDetectedCount;
+	fseek(g_StatStream, 0L, SEEK_SET);
+	fwprintf_s(g_StatStream, TEXT("userDetectedCount:%d\n"), userDetectedCount);
+	fwprintf_s(g_StatStream, TEXT("userInSceneCount:%d\n"), userInSceneCount);
+	fwprintf_s(g_StatStream, TEXT("totalTicks:%d\n"), totalTicks);
+	//fwprintf_s(g_StatStream, TEXT("averageTicks:%d\n"), averageTicks);
+	fflush(g_StatStream);
+}
+
 
 int main(int argc, char **argv)
 {
+
 	XnStatus nRetVal = XN_STATUS_OK;
 
 	for(int i = 0; i < USER_TRACK_COUNT_MAX; i ++)
@@ -419,14 +435,45 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	
-	g_strStatisticFile = ini.GetValue("statistic", "output-file", "C:\statistics.html");
-	if (g_strStatisticFile == NULL)
+	const char* strStatFile = ini.GetValue("statistic", "output-file", "C:\statistics.html");
+	if (strStatFile == NULL)
 	{
 		Trace("Fail to read statistic output file configuration \n");
 		return 1;
 	}
 
-	g_nIDTimer = 0;
+	AnsiToUnicode16L(strStatFile, strlen(strStatFile), g_strStatFile, STATISTICS_FILE_NAME_MAX_COUNT);
+	g_StatStream = _wfsopen(g_strStatFile, TEXT("wt"), _SH_DENYWR);
+	if (g_StatStream == NULL)
+	{
+		Trace("Fail to read statistic output file configuration \n");
+		return 1;
+	}
+
+	const char* strUserInKey = ini.GetValue("keyboard-mapping", "user-in", "1");
+	if (strUserInKey == NULL)
+	{
+		Trace("Fail to read user in key configuratin \n");
+		return 1;
+	}
+	const char* strUserOutKey = ini.GetValue("keyboard-mapping", "user-out", "2");
+	if (strUserOutKey == NULL)
+	{
+		Trace("Fail to read user in key configuratin \n");
+		return 1;
+	}
+	WCHAR inKey;
+	AnsiToUnicode16L(strUserInKey, strlen(strUserInKey), &inKey, 2);
+	WCHAR outKey;
+	AnsiToUnicode16L(strUserOutKey, strlen(strUserOutKey), &outKey, 2);
+
+	g_cUserInKey = inKey;
+	g_cUserOutKey = outKey;
+
+
+
+	g_nIDTimer = SetTimer(NULL, 0, STATISTICS_TIMER_INTERVAL_SEC * 1000, (TIMERPROC)StatisticsTimerProc);
+
 
 	if (argc > 1)
 	{
@@ -533,7 +580,7 @@ int main(int argc, char **argv)
 	nRetVal = g_Context.StartGeneratingAll();
 	CHECK_RC(nRetVal, "StartGenerating");
 
-	g_nIDTimer = SetTimer(NULL, 0, STATISTICS_TIMER_INTERVAL_SEC * 1000, (TIMERPROC)StatisticsTimerProc);
+	
 	if (g_nIDTimer == 0)
 	{
 		Trace("Cannot start statistics timer \n");
