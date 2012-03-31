@@ -72,9 +72,7 @@ FILE *g_StatStream = NULL;
 // Callback: New user was detected
 void XN_CALLBACK_TYPE User_NewUser(xn::UserGenerator& generator, XnUserID nId, void* pCookie)
 {
-	XnUInt32 epochTime = 0;
-	xnOSGetEpochTime(&epochTime);
-	Trace("%d New User %d\n", epochTime, nId);
+	
 	
 	SendKey(g_cUserInKey);
 

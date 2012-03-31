@@ -129,10 +129,12 @@ copy ..\..\..\..\..\platform\win32\external\bin\faast.exe $(TargetDir)\faast.exe
   <ItemGroup>
     <ClCompile Include="..\..\..\..\..\components\tracker\main.cpp" />
     <ClCompile Include="..\..\..\..\..\components\tracker\diagnostics.cpp" />
+    <ClCompile Include="..\..\..\..\..\components\tracker\nisensor.cpp" />
     <ClCompile Include="..\..\..\..\..\components\tracker\scenedrawer.cpp" />
     <ClCompile Include="..\..\..\..\..\components\tracker\utilities.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\components\tracker\nisensor.h" />
     <ClInclude Include="..\..\..\..\..\components\tracker\scenedrawer.h" />
     <ClInclude Include="..\..\..\..\..\components\tracker\diagnostics.h" />
     <ClInclude Include="..\..\..\..\..\components\tracker\utilities.h" />
