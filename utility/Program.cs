@@ -24,6 +24,8 @@ namespace Com.Imola.Retina.Utility
             {
                 MessageBox.Show("Error: " + ex.Message, "UserTracker", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+
+            Application.
         }
     }
 }

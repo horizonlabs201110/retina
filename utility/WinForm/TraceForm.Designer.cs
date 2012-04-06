@@ -1,6 +1,6 @@
 ﻿namespace Com.Imola.Retina.Utility.WinForm
 {
-    partial class MainForm
+    partial class TraceForm
     {
         /// <summary>
         /// Required designer variable.
@@ -30,10 +30,9 @@
         {
             this.components = new System.ComponentModel.Container();
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Text = "Utility Main";
+            this.Text = "TraceForm";
         }
 
         #endregion
     }
 }
-

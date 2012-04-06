@@ -1,6 +1,6 @@
 ﻿namespace Com.Imola.Retina.Utility.WinForm
 {
-    partial class MainForm
+    partial class CanvasForm
     {
         /// <summary>
         /// Required designer variable.
@@ -28,12 +28,33 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
+            this.CanvasPanel = new System.Windows.Forms.Panel();
+            this.SuspendLayout();
+
+            // 
+            // CanvasPanel
+            // 
+            this.CanvasPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.CanvasPanel.Location = new System.Drawing.Point(0, 0);
+            this.CanvasPanel.Name = "CanvasPanel";
+            this.CanvasPanel.Size = new System.Drawing.Size(602, 439);
+            this.CanvasPanel.TabIndex = 0;
+            this.CanvasPanel.Visible = false;
+
+            // 
+            // CanvasForm
+            // 
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Text = "Utility Main";
+            this.ClientSize = new System.Drawing.Size(602, 439);
+            this.Controls.Add(this.CanvasPanel);
+            this.Name = "CanvasForm";
+            this.Text = "Utility Canvas";
+            this.ResumeLayout(false);
         }
 
         #endregion
+
+        private System.Windows.Forms.Panel CanvasPanel;
     }
 }
-

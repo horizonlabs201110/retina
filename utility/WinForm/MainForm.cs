@@ -9,14 +9,14 @@ using System.Threading;
 using System.Windows.Forms;
 using OpenNI;
 
-namespace Com.Imola.Retina.Utility
+namespace Com.Imola.Retina.Utility.WinForm
 {
     public partial class MainForm : Form
     {
         public MainForm()
         {
             InitializeComponent();
-
+            
             this.context = Context.CreateFromXmlFile(SAMPLE_XML_FILE, out scriptNode);
             this.depth = context.FindExistingNode(NodeType.Depth) as DepthGenerator;
             if (this.depth == null)
