@@ -49,9 +49,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Configuration.cs" />
     <Compile Include="Diagnostics.cs" />
     <Compile Include="NIManager.cs" />
     <Compile Include="NISensor.cs" />
+    <Compile Include="Utilities.cs" />
     <Compile Include="WinForm\CanvasForm.cs">
       <SubType>Form</SubType>
     </Compile>

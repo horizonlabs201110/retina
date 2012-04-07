@@ -400,15 +400,5 @@ namespace Com.Imola.Retina.Utility
         public Dictionary<SkeletonJoint, SkeletonJointPosition> Joints { get; set; }
     }
 
-    class RenderConfig
-    {
-    }
 
-    class NIConfig
-    {
-    }
-
-    class KeyboardConfig
-    {
-    }
 }
