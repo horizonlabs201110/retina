@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Windows.Forms;
+using System.Threading;
+using Com.Imola.Retina.Utility.WinForm;
 
 namespace Com.Imola.Retina.Utility
 {
@@ -13,19 +13,37 @@ namespace Com.Imola.Retina.Utility
         [STAThread]
         static void Main()
         {
+            Diagnostics.Trace(TraceLevel.Information, "Utility started");
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            
-            try
-            {
-                Application.Run(new MainForm());
-            }
-            catch (System.Exception ex)
-            {
-                MessageBox.Show("Error: " + ex.Message, "UserTracker", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
 
-            Application.
+            Application.ApplicationExit += new EventHandler(Application_ApplicationExit);
+            
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.Automatic);
+            Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
+
+            niManager = NIManager.CreateInstance();
+            Application.Run(new MainForm(niManager));
         }
+
+        private static void Application_ApplicationExit(object sender, EventArgs e)
+        {
+            if (niManager != null)
+            {
+                //niManager
+                niManager = null;
+            }
+            Diagnostics.Trace(TraceLevel.Information, "Utility exit");
+        }
+
+        private static void Application_ThreadException(object sender, ThreadExceptionEventArgs e)
+        {
+            Diagnostics.Trace(TraceLevel.Error, "Unhandled exception encountered, {0}", e.Exception.ToString());
+            MessageBox.Show("Exit with unhandled error: " + e.Exception.Message, "Utility", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            Application.Exit();
+        }
+
+        private static INIManager niManager = null;
     }
 }

@@ -9,9 +9,9 @@ namespace Com.Imola.Retina.Utility
     {
     }
 
-    class NISensor : INISensor
+    class NISensor
     {
-        public static INISensor GetInstance()
+        private static INISensor GetInstance()
         {
             if (sensor == null)
             {
@@ -26,10 +26,6 @@ namespace Com.Imola.Retina.Utility
             return sensor;
         }
         
-        #region INISensor Member
-
-        #endregion INISensor Memeber
-
         private static INISensor sensor = null;
         private static object sensorLock = new object();
     }
