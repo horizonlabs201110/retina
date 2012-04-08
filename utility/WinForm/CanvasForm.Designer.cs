@@ -28,33 +28,31 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.CanvasPanel = new System.Windows.Forms.Panel();
+            this.plCanvas = new System.Windows.Forms.Panel();
             this.SuspendLayout();
-
             // 
-            // CanvasPanel
+            // plCanvas
             // 
-            this.CanvasPanel.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.CanvasPanel.Location = new System.Drawing.Point(0, 0);
-            this.CanvasPanel.Name = "CanvasPanel";
-            this.CanvasPanel.Size = new System.Drawing.Size(602, 439);
-            this.CanvasPanel.TabIndex = 0;
-            this.CanvasPanel.Visible = false;
-
+            this.plCanvas.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.plCanvas.Location = new System.Drawing.Point(0, 0);
+            this.plCanvas.Name = "plCanvas";
+            this.plCanvas.Size = new System.Drawing.Size(602, 439);
+            this.plCanvas.TabIndex = 0;
             // 
             // CanvasForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(602, 439);
-            this.Controls.Add(this.CanvasPanel);
+            this.Controls.Add(this.plCanvas);
             this.Name = "CanvasForm";
             this.Text = "Utility Canvas";
             this.ResumeLayout(false);
+
         }
 
         #endregion
 
-        private System.Windows.Forms.Panel CanvasPanel;
+        private System.Windows.Forms.Panel plCanvas;
     }
 }

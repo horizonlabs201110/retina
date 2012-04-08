@@ -18,65 +18,22 @@ namespace Com.Imola.Retina.Utility.WinForm
         public MainForm(INIManager manager)
         {
             InitializeComponent();
-            
-            
+            niManager = manager;
         }
 
-        protected override void OnPaint(PaintEventArgs e)
+        private void btGenerating_Click(object sender, EventArgs e)
         {
-            base.OnPaint(e);
 
-            lock (this)
-            {
-                e.Graphics.DrawImage(this.bitmap,
-                    this.CanvasPanel.Location.X,
-                    this.CanvasPanel.Location.Y,
-                    this.CanvasPanel.Size.Width,
-                    this.CanvasPanel.Size.Height);
-            }
         }
 
-
-        protected override void OnClosing(CancelEventArgs e)
+        private void btTrace_Click(object sender, EventArgs e)
         {
-            this.shouldRun = false;
-            this.readerThread.Join();
-            base.OnClosing(e);
+
         }
 
-        protected override void OnKeyPress(KeyPressEventArgs e)
+        private void btRendering_Click(object sender, EventArgs e)
         {
-            if (e.KeyChar == 27)
-            {
-                Close();
-            }
-            switch (e.KeyChar)
-            {
-                case (char)27:
-                    break;
-                case 'b':
-                    this.shouldDrawBackground = !this.shouldDrawBackground;
-                    break;
-                case 'x':
-                    this.shouldDrawPixels = !this.shouldDrawPixels;
-                    break;
-                case 's':
-                    this.shouldDrawSkeleton = !this.shouldDrawSkeleton;
-                    break;
-                case 'i':
-                    this.shouldPrintID = !this.shouldPrintID;
-                    break;
-                case 'l':
-                    this.shouldPrintState = !this.shouldPrintState;
-                    break;
 
-            }
-            base.OnKeyPress(e);
-        }
-
-        protected override void OnPaintBackground(PaintEventArgs pevent)
-        {
-            //Don't allow the background to paint
         }
     }
 }

@@ -3,7 +3,5 @@
 namespace Com.Imola.Retina.Utility
 {
     class Utilities
-    {
-        
-    }
+    { }
 }

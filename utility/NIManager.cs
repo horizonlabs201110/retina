@@ -10,30 +10,170 @@ using System.Threading;
 
 namespace Com.Imola.Retina.Utility
 {
-    interface INIManager
+    public interface INIManager
     {
-        EventHandler RenderComplete;
+        event EventHandler FrameComplete;
+        event EventHandler StatusChanged;
+        event EventHandler StatisticsReady;
 
-        void Start();
-        void Stop();
+        void StartGenerating();
+        void StopGenerating();
         void StartRendering();
         void StopRendering();
-        void GetBitmap();
+        void SettingsChanged();
+        Bitmap GetFrame();
+    }
+
+    public class StatusEventArgs : EventArgs
+    {
+        public StatusEventArgs(string msg)
+        {
+            status = msg;
+        }
+
+        public string Status
+        {
+            get
+            {
+                return status;
+            }
+        }
+
+        private string status = string.Empty;
+    }
+
+    public class StatisticsEventArgs : EventArgs
+    {
+        public StatisticsEventArgs(string msg)
+        {
+            statistics = msg;
+        }
+
+        public string Statistics
+        {
+            get
+            {
+                return statistics;
+            }
+        }
+
+        private string statistics = string.Empty;
     }
 
     class NIManager : INIManager
     {
-    
+        #region INIManager
+        
+        public event EventHandler FrameComplete;
+        public event EventHandler StatusChanged;
+        public event EventHandler StatisticsReady;
+
+        public void StartGenerating()
+        {
+            if (!isGenerating)
+            {
+                lock (lockGenerating)
+                {
+                    if (!isGenerating)
+                    {
+                        StartGeneratingWithNoLock();
+                    }
+                }
+            }
+        }
+
+        public void StopGenerating()
+        {
+            if (isGenerating)
+            {
+                lock (lockGenerating)
+                {
+                    if (isGenerating)
+                    {
+                        if (isRendering)
+                        {
+                            lock (lockRendering)
+                            {
+                                if (isRendering)
+                                {
+                                    StopRenderingWithNoLock();
+                                }
+                            }
+                        }
+                        
+                        isGenerating = false;
+                        this.userGenerator.StopGenerating();
+                    }
+                }
+            }
+        }
+
+        public void StartRendering()
+        {
+            if (!isGenerating)
+            {
+                lock (lockGenerating)
+                {
+                    if (!isGenerating)
+                    {
+                        StartGeneratingWithNoLock();
+                    }
+
+                    if (!isRendering)
+                    {
+                        lock (lockRendering)
+                        {
+                            if (!isRendering)
+                            {
+                                this.renderTreadTerminate = false;
+                                this.renderThread.Start();
+
+                                isRendering = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        public void StopRendering()
+        {
+            if (isRendering)
+            {
+                lock (lockRendering)
+                {
+                    if (isRendering)
+                    {
+                        StopRenderingWithNoLock();
+                    }
+                }
+            }
+        }
+
+        public void SettingsChanged()
+        {
+            settings = Configuration.Settings;
+        }
+
+        public Bitmap GetFrame()
+        {
+            return bitmap;
+        }
+
+        #endregion INIManager
+
         public static INIManager CreateInstance()
         {
             return new NIManager();
         }
 
         public NIManager()
-        {
+        { 
             try
             {
-                this.context = Context.CreateFromXmlFile(Utilities.OPENNI_CONFIG_FILE, out scriptNode);
+                this.settings = Configuration.Settings;
+
+                this.context = Context.CreateFromXmlFile(Configuration.OPENNI_CONFIG_FILE, out scriptNode);
                 this.depth = this.context.FindExistingNode(NodeType.Depth) as DepthGenerator;
                 if (this.depth == null)
                 {
@@ -45,107 +185,91 @@ namespace Com.Imola.Retina.Utility
                 this.userGenerator.NewUser += NewUser;
                 this.userGenerator.LostUser += LostUser;
 
-                this.poseDetectionCapability = this.userGenerator.PoseDetectionCapability;
-                this.poseDetectionCapability.PoseDetected += PoseDetected;
-                
                 this.skeletonCapbility = this.userGenerator.SkeletonCapability;
+                if (!this.skeletonCapbility.DoesNeedPoseForCalibration)
+                {
+                    throw new Exception("Should not need pose for calibration!");
+                }
+
                 this.skeletonCapbility.CalibrationComplete += CalibrationComplete;
-                this.skeletonCapbility.SetSkeletonProfile(SkeletonProfile.All);
+                this.skeletonCapbility.SetSkeletonProfile(settings.GeneratingSettings.SkeletonProfile);
 
                 this.usersInScene = new Dictionary<int, NIUserInfoEx>();
                 this.usersInPast = new List<NIUserInfo>();
 
                 this.bitmap = new Bitmap((int)this.depth.MapOutputMode.XRes, (int)this.depth.MapOutputMode.YRes/*, System.Drawing.Imaging.PixelFormat.Format24bppRgb*/);
-
+            
                 this.renderThread = new Thread(RenderThread);
 
+                this.statisticsTimer = new Timer(StatisticsTimerCallback);
+                this.statisticsTimer.Change(Configuration.STATISTICS_INTERVAL_MS, Timeout.Infinite);
+
+                Diagnostics.TraceDebug("NIManager created");
             }
             catch (Exception)
             {
+                Diagnostics.TraceDebug("NIManager creation failed");
                 throw;
             }
-            Diagnostics.TraceDebug("NIManager created");
-            
-            
-            
-
-            
-            
         }
 
-        #region INIManager
-
-        public EventHandler RenderComplete;
-
-        public void Start()
+        private void NewUser(object sender, NewUserEventArgs e)
         {
-            this.userGenerator.StartGenerating();
+            string msg = string.Format("people [{0}] detected, start calibration ...", e.ID);
+            StatusChanged(this, new StatusEventArgs(msg));
+            Diagnostics.TraceDebug(msg);
+
+            this.skeletonCapbility.RequestCalibration(e.ID, true);
         }
 
-        public void Stop()
+        private NIUserInfoEx CreateUserEx()
         {
-            this.userGenerator.StopGenerating();
-        }
+            NIUserInfoEx userEx = new NIUserInfoEx();
+            userEx.User = new NIUserInfo();
+            userEx.User.Id = Guid.NewGuid();
+            userEx.User.InTick = 0;
+            userEx.User.OutTick = 0;
 
-        public void StartRendering()
-        {
-            this.shouldRun = true;
-            this.renderThread.Start();
-        }
+            userEx.Joints = new Dictionary<SkeletonJoint, SkeletonJointPosition>();
 
-        public void StopRendering()
-        {
-            this.shouldRun = false;
-            this.renderThread.Join();
+            return userEx;
         }
-
-        public void GetBitmap()
-        {
-        }
-
-        #endregion INIManager
 
         private void CalibrationComplete(object sender, CalibrationProgressEventArgs e)
         {
             if (e.Status == CalibrationStatus.OK)
             {
+                string msg = string.Format("people [{0}] calibrated, start tracking ...", e.ID);
+                StatusChanged(this, new StatusEventArgs(msg));
+                Diagnostics.TraceDebug(msg);
+
                 this.skeletonCapbility.StartTracking(e.ID);
-                this.joints.Add(e.ID, new Dictionary<SkeletonJoint, SkeletonJointPosition>());
+
+                NIUserInfoEx userEx = CreateUserEx();
+                userEx.User.InTick = DateTime.Now.Ticks;
+                this.usersInScene.Add(e.ID, userEx);
             }
             else if (e.Status != CalibrationStatus.ManualAbort)
             {
-                if (this.skeletonCapbility.DoesNeedPoseForCalibration)
-                {
-                    this.poseDetectionCapability.StartPoseDetection(this.skeletonCapbility.CalibrationPose, e.ID);
-                }
-                else
-                {
-                    this.skeletonCapbility.RequestCalibration(e.ID, true);
-                }
-            }
-        }
+                string msg = string.Format("people [{0}] calibration failed, restart calibration ...", e.ID);
+                StatusChanged(this, new StatusEventArgs(msg));
+                Diagnostics.TraceDebug(msg);
 
-        private void PoseDetected(object sender, PoseDetectedEventArgs e)
-        {
-            this.poseDetectionCapability.StopPoseDetection(e.ID);
-            this.skeletonCapbility.RequestCalibration(e.ID, true);
-        }
-
-        private void NewUser(object sender, NewUserEventArgs e)
-        {
-            if (this.skeletonCapbility.DoesNeedPoseForCalibration)
-            {
-                this.poseDetectionCapability.StartPoseDetection(this.skeletonCapbility.CalibrationPose, e.ID);
-            }
-            else
-            {
                 this.skeletonCapbility.RequestCalibration(e.ID, true);
             }
         }
 
         private void LostUser(object sender, UserLostEventArgs e)
         {
-            this.joints.Remove(e.ID);
+            string msg = string.Format("people [{0}] lost", e.ID);
+            StatusChanged(this, new StatusEventArgs(msg));
+            Diagnostics.TraceDebug(msg);
+
+            NIUserInfo user = usersInScene[e.ID].User;
+            user.OutTick = DateTime.Now.Ticks;
+
+            usersInScene.Remove(e.ID);
+            usersInPast.Add(user);
         }
 
         private unsafe void CalcHist(DepthMetaData depthMD)
@@ -195,7 +319,8 @@ namespace Com.Imola.Retina.Utility
             {
                 pos.Position = this.depth.ConvertRealWorldToProjective(pos.Position);
             }
-            this.joints[user][joint] = pos;
+
+            usersInScene[user].Joints[joint] = pos;
         }
 
         private void GetJoints(int user)
@@ -239,7 +364,7 @@ namespace Com.Imola.Retina.Utility
         private void DrawSkeleton(Graphics g, Color color, int user)
         {
             GetJoints(user);
-            Dictionary<SkeletonJoint, SkeletonJointPosition> dict = this.joints[user];
+            Dictionary<SkeletonJoint, SkeletonJointPosition> dict = usersInScene[user].Joints;
 
             DrawLine(g, color, dict, SkeletonJoint.Head, SkeletonJoint.Neck);
 
@@ -269,7 +394,7 @@ namespace Com.Imola.Retina.Utility
         {
             DepthMetaData depthMD = new DepthMetaData();
 
-            while (this.shouldRun)
+            while (this.renderTreadTerminate)
             {
                 try
                 {
@@ -289,7 +414,7 @@ namespace Com.Imola.Retina.Utility
                     BitmapData data = this.bitmap.LockBits(rect, ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
 
-                    if (this.shouldDrawPixels)
+                    if (settings.RenderingSettings.DrawPixels)
                     {
                         ushort* pDepth = (ushort*)this.depth.DepthMapPtr.ToPointer();
                         ushort* pLabels = (ushort*)this.userGenerator.GetUserPixels(0).LabelMapPtr.ToPointer();
@@ -303,7 +428,7 @@ namespace Com.Imola.Retina.Utility
                                 pDest[0] = pDest[1] = pDest[2] = 0;
 
                                 ushort label = *pLabels;
-                                if (this.shouldDrawBackground || *pLabels != 0)
+                                if (this.settings.RenderingSettings.DrawBackground || *pLabels != 0)
                                 {
                                     Color labelColor = Color.White;
                                     if (label != 0)
@@ -325,13 +450,13 @@ namespace Com.Imola.Retina.Utility
                     int[] users = this.userGenerator.GetUsers();
                     foreach (int user in users)
                     {
-                        if (this.shouldPrintID)
+                        if (settings.RenderingSettings.PrintID)
                         {
                             Point3D com = this.userGenerator.GetCoM(user);
                             com = this.depth.ConvertRealWorldToProjective(com);
 
                             string label = "";
-                            if (!this.shouldPrintState)
+                            if (!settings.RenderingSettings.PrintState)
                                 label += user;
                             else if (this.skeletonCapbility.IsTracking(user))
                                 label += user + " - Tracking";
@@ -344,43 +469,62 @@ namespace Com.Imola.Retina.Utility
 
                         }
 
-                        if (this.shouldDrawSkeleton && this.skeletonCapbility.IsTracking(user))
+                        if (settings.RenderingSettings.DrawSkeleton && this.skeletonCapbility.IsTracking(user))
                             //                        if (this.skeletonCapbility.IsTracking(user))
                             DrawSkeleton(g, anticolors[user % ncolors], user);
 
                     }
                     g.Dispose();
                 }
-                this.RenderComplete.Invoke(this, null);
-                this.Invalidate();
+
+                FrameComplete(this, null);
             }
         }
 
+        private void StopRenderingWithNoLock()
+        {
+            this.isRendering = false;
+
+            this.renderTreadTerminate = true;
+            this.renderThread.Join();
+        }
+
+        private void StartGeneratingWithNoLock()
+        {
+            this.userGenerator.StartGenerating();
+            isGenerating = true;
+        }
+
+        private void StatisticsTimerCallback(object state)
+        {
+            this.statisticsTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+            StatisticsReady(this, new StatisticsEventArgs(string.Empty));
+
+            this.statisticsTimer.Change(Configuration.STATISTICS_INTERVAL_MS, Timeout.Infinite);
+        }
+
+        private bool isGenerating = false;
+        private bool isRendering = false;
+        private object lockGenerating = new object();
+        private object lockRendering = new object();
 
         private Context context = null;
         private DepthGenerator depth = null;
         private UserGenerator userGenerator = null;
         private SkeletonCapability skeletonCapbility = null;
-        private PoseDetectionCapability poseDetectionCapability = null;
 
         private Dictionary<int, NIUserInfoEx> usersInScene = null;
         private List<NIUserInfo> usersInPast = null;
-
+        private UtilitySettings settings = null;
+        private Timer statisticsTimer = null;
+        
         private Thread renderThread;
-        private bool shouldRun;
+        private bool renderTreadTerminate = true;
         private Bitmap bitmap;
         private int[] histogram;
 
         private ScriptNode scriptNode;
-
-        private Dictionary<int, Dictionary<SkeletonJoint, SkeletonJointPosition>> userJoints;
-
-
-        private bool shouldDrawPixels = true;
-        private bool shouldDrawBackground = true;
-        private bool shouldPrintID = true;
-        private bool shouldPrintState = true;
-        private bool shouldDrawSkeleton = true;
 
         private Color[] colors = { Color.Red, Color.Blue, Color.ForestGreen, Color.Yellow, Color.Orange, Color.Purple, Color.White };
         private Color[] anticolors = { Color.Green, Color.Orange, Color.Red, Color.Purple, Color.Blue, Color.Yellow, Color.Black };
@@ -390,8 +534,8 @@ namespace Com.Imola.Retina.Utility
     class NIUserInfo
     {
         public Guid Id { get; set; }
-        public Int32 InTick { get; set; }
-        public Int32 OutTick { get; set; }
+        public long InTick { get; set; }
+        public long OutTick { get; set; }
     }
 
     class NIUserInfoEx

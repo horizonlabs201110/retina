@@ -54,12 +54,12 @@ namespace Com.Imola.Retina.Utility
 
         #region IDiagnostics
 
-        public static void Trace(TraceLevel level, string msg, params object[] args)
+        public void Trace(TraceLevel level, string msg, params object[] args)
         {
             return;
         }
 
-        public static void TraceDebug(string msg, params object[] args)
+        public void TraceDebug(string msg, params object[] args)
         {
             Trace(TraceLevel.Debug, msg, args);
         }

@@ -31,7 +31,7 @@ namespace Com.Imola.Retina.Utility
         {
             if (niManager != null)
             {
-                //niManager
+                niManager.StopGenerating();
                 niManager = null;
             }
             Diagnostics.Trace(TraceLevel.Information, "Utility exit");
