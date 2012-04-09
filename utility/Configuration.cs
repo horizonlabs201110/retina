@@ -14,8 +14,9 @@ namespace Com.Imola.Retina.Utility
         printID = 3,
         printState = 4,
         skeletonProfile = 5,
-        keyboardPeopleIn = 6,
-        keyboardPeopleOut = 7
+        peopleInKey = 6,
+        peopleOutKey = 7,
+        traceLevel = 8
     }
 
     enum KeyboardTrigger
@@ -36,13 +37,44 @@ namespace Com.Imola.Retina.Utility
     class GeneratingSettings
     {
         public SkeletonProfile SkeletonProfile { get; set; }
-        public Dictionary<KeyboardTrigger, int> KeyboardMapping { get; set; }
+        public Dictionary<KeyboardTrigger, ushort> KeyboardMapping { get; set; }
     }
 
-    class UtilitySettings
+    class DiagnosticsSettings
+    {
+        public TraceLevel TraceLevel { get; set; }
+    }
+
+    class UtilitySettings : ICloneable
     {
         public RenderingSettings RenderingSettings { get; set; }
         public GeneratingSettings GeneratingSettings { get; set; }
+        public DiagnosticsSettings DiagnosticsSettings { get; set; }
+
+        public object Clone()
+        {
+            UtilitySettings settings = new UtilitySettings();
+
+            settings.RenderingSettings = new RenderingSettings();
+            settings.RenderingSettings.DrawBackground = this.RenderingSettings.DrawBackground;
+            settings.RenderingSettings.DrawPixels = this.RenderingSettings.DrawPixels;
+            settings.RenderingSettings.DrawSkeleton = this.RenderingSettings.DrawSkeleton;
+            settings.RenderingSettings.PrintID = this.RenderingSettings.PrintID;
+            settings.RenderingSettings.PrintState = this.RenderingSettings.PrintState;
+
+            settings.GeneratingSettings = new GeneratingSettings();
+            settings.GeneratingSettings.SkeletonProfile = this.GeneratingSettings.SkeletonProfile;
+            settings.GeneratingSettings.KeyboardMapping = new Dictionary<KeyboardTrigger, ushort>();
+            foreach (KeyValuePair<KeyboardTrigger, ushort> kv in this.GeneratingSettings.KeyboardMapping)
+            {
+                settings.GeneratingSettings.KeyboardMapping.Add(kv.Key, kv.Value);
+            }
+
+            settings.DiagnosticsSettings = new DiagnosticsSettings();
+            settings.DiagnosticsSettings.TraceLevel = this.DiagnosticsSettings.TraceLevel;
+
+            return settings;
+        }
     }
 
     interface IConfigurationPersist
@@ -54,7 +86,7 @@ namespace Com.Imola.Retina.Utility
     class Configuration
     {
         public const string OPENNI_CONFIG_FILE = @"OpenNI.xml";
-        public const int STATISTICS_INTERVAL_MS = 1000;
+        public const int STATISTICS_TIMER_INTERVAL_MS = 1000;
 
         public static UtilitySettings Settings
         {
@@ -64,7 +96,10 @@ namespace Com.Imola.Retina.Utility
                 {
                     lock (settingsLock)
                     {
-                        settings = GetPersistProvider().Load();
+                        if (settings == null)
+                        {
+                            settings = GetPersistProvider().Load();
+                        }
                     }
                 }
                 return settings;
@@ -110,71 +145,82 @@ namespace Com.Imola.Retina.Utility
 
         public UtilitySettings Load()
         {
-            System.Configuration.Configuration config = System.Configuration.ConfigurationManager.OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.None);
-            
-            UtilitySettings settings = new UtilitySettings();
-            settings.RenderingSettings = new RenderingSettings();
+            try
+            {
+                System.Configuration.Configuration config = System.Configuration.ConfigurationManager.OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.None);
 
-            settings.RenderingSettings.DrawBackground =
-                Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawBackground.ToString()].Value);
-            settings.RenderingSettings.DrawPixels =
-                Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawPixels.ToString()].Value);
-            settings.RenderingSettings.DrawSkeleton =
-                Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawSkeleton.ToString()].Value);
-            settings.RenderingSettings.PrintID =
-                Boolean.Parse(config.AppSettings.Settings[SettingKeys.printID.ToString()].Value);
-            settings.RenderingSettings.PrintState =
-                Boolean.Parse(config.AppSettings.Settings[SettingKeys.printState.ToString()].Value);
+                UtilitySettings settings = new UtilitySettings();
 
-            settings.GeneratingSettings = new GeneratingSettings();
-            settings.GeneratingSettings.SkeletonProfile =
-                (SkeletonProfile)Enum.Parse(typeof(SkeletonProfile), config.AppSettings.Settings[SettingKeys.skeletonProfile.ToString()].Value, true);
+                settings.RenderingSettings = new RenderingSettings();
+                settings.RenderingSettings.DrawBackground =
+                    Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawBackground.ToString()].Value);
+                settings.RenderingSettings.DrawPixels =
+                    Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawPixels.ToString()].Value);
+                settings.RenderingSettings.DrawSkeleton =
+                    Boolean.Parse(config.AppSettings.Settings[SettingKeys.drawSkeleton.ToString()].Value);
+                settings.RenderingSettings.PrintID =
+                    Boolean.Parse(config.AppSettings.Settings[SettingKeys.printID.ToString()].Value);
+                settings.RenderingSettings.PrintState =
+                    Boolean.Parse(config.AppSettings.Settings[SettingKeys.printState.ToString()].Value);
 
-            settings.GeneratingSettings.KeyboardMapping = new Dictionary<KeyboardTrigger, int>();
-            settings.GeneratingSettings.KeyboardMapping.Add(
-                KeyboardTrigger.PeopleIn,
-                int.Parse(config.AppSettings.Settings[SettingKeys.keyboardPeopleIn.ToString()].Value));
-            settings.GeneratingSettings.KeyboardMapping.Add(
-                KeyboardTrigger.PeopleOut,
-                int.Parse(config.AppSettings.Settings[SettingKeys.keyboardPeopleOut.ToString()].Value));
+                settings.GeneratingSettings = new GeneratingSettings();
+                settings.GeneratingSettings.SkeletonProfile =
+                    (SkeletonProfile)Enum.Parse(typeof(SkeletonProfile), config.AppSettings.Settings[SettingKeys.skeletonProfile.ToString()].Value, true);
 
+                settings.GeneratingSettings.KeyboardMapping = new Dictionary<KeyboardTrigger, ushort>();
+                settings.GeneratingSettings.KeyboardMapping.Add(
+                    KeyboardTrigger.PeopleIn,
+                    ushort.Parse(config.AppSettings.Settings[SettingKeys.peopleInKey.ToString()].Value));
+                settings.GeneratingSettings.KeyboardMapping.Add(
+                    KeyboardTrigger.PeopleOut,
+                    ushort.Parse(config.AppSettings.Settings[SettingKeys.peopleOutKey.ToString()].Value));
 
-            return settings;
+                settings.DiagnosticsSettings = new DiagnosticsSettings();
+                settings.DiagnosticsSettings.TraceLevel =
+                    (TraceLevel)Enum.Parse(typeof(TraceLevel), config.AppSettings.Settings[SettingKeys.traceLevel.ToString()].Value, true);
+
+                return settings;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
 
         public void Persist(UtilitySettings settings)
         {
-            System.Configuration.Configuration config = System.Configuration.ConfigurationManager.OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.None);
-            
-            config.AppSettings.Settings.Add(
-                SettingKeys.drawBackground.ToString(),
-                settings.RenderingSettings.DrawBackground.ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.drawPixels.ToString(),
-                settings.RenderingSettings.DrawPixels.ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.drawSkeleton.ToString(),
-                settings.RenderingSettings.DrawSkeleton.ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.printID.ToString(),
-                settings.RenderingSettings.DrawBackground.ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.printState.ToString(),
-                settings.RenderingSettings.DrawBackground.ToString());
+            try
+            {
+                System.Configuration.Configuration config = System.Configuration.ConfigurationManager.OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.None);
 
+                config.AppSettings.Settings[SettingKeys.drawBackground.ToString()].Value =
+                    settings.RenderingSettings.DrawBackground.ToString();
+                config.AppSettings.Settings[SettingKeys.drawPixels.ToString()].Value =
+                    settings.RenderingSettings.DrawPixels.ToString();
+                config.AppSettings.Settings[SettingKeys.drawSkeleton.ToString()].Value =
+                    settings.RenderingSettings.DrawSkeleton.ToString();
+                config.AppSettings.Settings[SettingKeys.printID.ToString()].Value =
+                    settings.RenderingSettings.DrawBackground.ToString();
+                config.AppSettings.Settings[SettingKeys.printState.ToString()].Value =
+                    settings.RenderingSettings.DrawBackground.ToString();
 
-            config.AppSettings.Settings.Add(
-                SettingKeys.skeletonProfile.ToString(),
-                settings.GeneratingSettings.SkeletonProfile.ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.keyboardPeopleIn.ToString(),
-                settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleIn].ToString());
-            config.AppSettings.Settings.Add(
-                SettingKeys.keyboardPeopleOut.ToString(),
-                settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleOut].ToString());
+                config.AppSettings.Settings[SettingKeys.skeletonProfile.ToString()].Value =
+                    settings.GeneratingSettings.SkeletonProfile.ToString();
+                config.AppSettings.Settings[SettingKeys.peopleInKey.ToString()].Value =
+                    settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleIn].ToString();
+                config.AppSettings.Settings[SettingKeys.peopleOutKey.ToString()].Value =
+                    settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleOut].ToString();
 
-            config.Save(System.Configuration.ConfigurationSaveMode.Modified);
-            System.Configuration.ConfigurationManager.RefreshSection("appSettings");
+                config.AppSettings.Settings[SettingKeys.traceLevel.ToString()].Value =
+                    settings.DiagnosticsSettings.TraceLevel.ToString();
+
+                config.Save(System.Configuration.ConfigurationSaveMode.Modified);
+                System.Configuration.ConfigurationManager.RefreshSection("appSettings");
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
 
         #endregion IDiagnostics

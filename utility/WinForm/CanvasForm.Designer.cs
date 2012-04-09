@@ -38,6 +38,7 @@
             this.plCanvas.Name = "plCanvas";
             this.plCanvas.Size = new System.Drawing.Size(602, 439);
             this.plCanvas.TabIndex = 0;
+            this.plCanvas.Visible = false;
             // 
             // CanvasForm
             // 

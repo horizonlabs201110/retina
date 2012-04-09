@@ -28,36 +28,36 @@ namespace Com.Imola.Retina.Utility
     {
         public StatusEventArgs(string msg)
         {
-            status = msg;
+            statusMsg = msg;
         }
 
-        public string Status
+        public string StatusMessage
         {
             get
             {
-                return status;
+                return statusMsg;
             }
         }
 
-        private string status = string.Empty;
+        private string statusMsg = string.Empty;
     }
 
     public class StatisticsEventArgs : EventArgs
     {
         public StatisticsEventArgs(string msg)
         {
-            statistics = msg;
+            statisticsMsg = msg;
         }
 
-        public string Statistics
+        public string StatisticsMessage
         {
             get
             {
-                return statistics;
+                return statisticsMsg;
             }
         }
 
-        private string statistics = string.Empty;
+        private string statisticsMsg = string.Empty;
     }
 
     class NIManager : INIManager
@@ -70,57 +70,80 @@ namespace Com.Imola.Retina.Utility
 
         public void StartGenerating()
         {
-            if (!isGenerating)
+            try
             {
-                lock (lockGenerating)
+                if (!isGenerating)
                 {
-                    if (!isGenerating)
+                    lock (lockGenerating)
                     {
-                        StartGeneratingWithNoLock();
+                        if (!isGenerating)
+                        {
+                            StartGeneratingWithNoLock();
+
+                            NotifyStatus("Start generating ...");
+                            Diagnostics.Trace(TraceLevel.Information, "Start generating");
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                NotifyStatus("Fail to start generating");
+                Diagnostics.Trace(TraceLevel.Error, "Fail to start generating, {0}", ex.ToString());
             }
         }
 
         public void StopGenerating()
         {
-            if (isGenerating)
+            try
             {
-                lock (lockGenerating)
+                if (isGenerating)
                 {
-                    if (isGenerating)
+                    lock (lockGenerating)
                     {
-                        if (isRendering)
+                        if (isGenerating)
                         {
-                            lock (lockRendering)
+                            if (isRendering)
                             {
-                                if (isRendering)
+                                lock (lockRendering)
                                 {
-                                    StopRenderingWithNoLock();
+                                    if (isRendering)
+                                    {
+                                        StopRenderingWithNoLock();
+                                    }
                                 }
                             }
+
+                            isGenerating = false;
+                            this.userGenerator.StopGenerating();
+
+                            NotifyStatus("Stop generating");
+                            Diagnostics.Trace(TraceLevel.Information, "Stop generating");
+
                         }
-                        
-                        isGenerating = false;
-                        this.userGenerator.StopGenerating();
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                NotifyStatus("Fail to stop generating");
+                Diagnostics.Trace(TraceLevel.Error, "Fail to stop generating, {0}", ex.ToString());
             }
         }
 
         public void StartRendering()
         {
-            if (!isGenerating)
+            try
             {
-                lock (lockGenerating)
+                if (!isRendering)
                 {
-                    if (!isGenerating)
+                    lock (lockGenerating)
                     {
-                        StartGeneratingWithNoLock();
-                    }
+                        if (!isGenerating)
+                        {
+                            StartGeneratingWithNoLock();
+                        }
 
-                    if (!isRendering)
-                    {
                         lock (lockRendering)
                         {
                             if (!isRendering)
@@ -129,30 +152,52 @@ namespace Com.Imola.Retina.Utility
                                 this.renderThread.Start();
 
                                 isRendering = true;
+
+                                NotifyStatus("Start rendering ...");
+                                Diagnostics.Trace(TraceLevel.Information, "Start rendering");
                             }
                         }
                     }
                 }
             }
+            catch (Exception ex)
+            {
+                NotifyStatus("Fail to start rendering");
+                Diagnostics.Trace(TraceLevel.Error, "Fail to start rendering, {0}", ex.ToString());
+            }
         }
 
         public void StopRendering()
         {
-            if (isRendering)
+            try
             {
-                lock (lockRendering)
+                if (isRendering)
                 {
-                    if (isRendering)
+                    lock (lockRendering)
                     {
-                        StopRenderingWithNoLock();
+                        if (isRendering)
+                        {
+                            StopRenderingWithNoLock();
+
+                            NotifyStatus("Stop rendering");
+                            Diagnostics.Trace(TraceLevel.Information, "Stop rendering");
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                NotifyStatus("Fail to stop rendering");
+                Diagnostics.Trace(TraceLevel.Error, "Fail to stop rendering, {0}", ex.ToString());
             }
         }
 
         public void SettingsChanged()
         {
             settings = Configuration.Settings;
+
+            NotifyStatus("Settings changed");
+            Diagnostics.TraceDebug("Settings changed");
         }
 
         public Bitmap GetFrame()
@@ -162,17 +207,20 @@ namespace Com.Imola.Retina.Utility
 
         #endregion INIManager
 
-        public static INIManager CreateInstance()
+        #region Private Members
+
+        private void StopRenderingWithNoLock()
         {
-            return new NIManager();
+            this.isRendering = false;
+
+            //this.renderTreadTerminate = true;
+            this.renderThread.Join();
         }
 
-        public NIManager()
-        { 
+        private void StartGeneratingWithNoLock()
+        {
             try
             {
-                this.settings = Configuration.Settings;
-
                 this.context = Context.CreateFromXmlFile(Configuration.OPENNI_CONFIG_FILE, out scriptNode);
                 this.depth = this.context.FindExistingNode(NodeType.Depth) as DepthGenerator;
                 if (this.depth == null)
@@ -186,40 +234,47 @@ namespace Com.Imola.Retina.Utility
                 this.userGenerator.LostUser += LostUser;
 
                 this.skeletonCapbility = this.userGenerator.SkeletonCapability;
-                if (!this.skeletonCapbility.DoesNeedPoseForCalibration)
+                this.skeletonCapbility.CalibrationComplete += CalibrationComplete;
+                this.skeletonCapbility.SetSkeletonProfile(settings.GeneratingSettings.SkeletonProfile);
+                if (this.skeletonCapbility.DoesNeedPoseForCalibration)
                 {
                     throw new Exception("Should not need pose for calibration!");
                 }
 
-                this.skeletonCapbility.CalibrationComplete += CalibrationComplete;
-                this.skeletonCapbility.SetSkeletonProfile(settings.GeneratingSettings.SkeletonProfile);
-
-                this.usersInScene = new Dictionary<int, NIUserInfoEx>();
-                this.usersInPast = new List<NIUserInfo>();
-
                 this.bitmap = new Bitmap((int)this.depth.MapOutputMode.XRes, (int)this.depth.MapOutputMode.YRes/*, System.Drawing.Imaging.PixelFormat.Format24bppRgb*/);
-            
-                this.renderThread = new Thread(RenderThread);
 
-                this.statisticsTimer = new Timer(StatisticsTimerCallback);
-                this.statisticsTimer.Change(Configuration.STATISTICS_INTERVAL_MS, Timeout.Infinite);
+                this.userGenerator.StartGenerating();
 
-                Diagnostics.TraceDebug("NIManager created");
+                isGenerating = true;
             }
             catch (Exception)
             {
-                Diagnostics.TraceDebug("NIManager creation failed");
                 throw;
             }
         }
 
-        private void NewUser(object sender, NewUserEventArgs e)
+        private void NotifyStatus(string statusMsg)
         {
-            string msg = string.Format("people [{0}] detected, start calibration ...", e.ID);
-            StatusChanged(this, new StatusEventArgs(msg));
-            Diagnostics.TraceDebug(msg);
+            if (StatusChanged != null)
+            {
+                StatusChanged(this, new StatusEventArgs(statusMsg));
+            }
+        }
 
-            this.skeletonCapbility.RequestCalibration(e.ID, true);
+        private void NotifyStatistics(string statisticsMsg)
+        {
+            if (StatisticsReady != null)
+            {
+                StatisticsReady(this, new StatisticsEventArgs(statisticsMsg));
+            }
+        }
+
+        private void NotifyFame()
+        {
+            if (FrameComplete != null)
+            {
+                FrameComplete(this, new EventArgs());
+            }
         }
 
         private NIUserInfoEx CreateUserEx()
@@ -235,25 +290,36 @@ namespace Com.Imola.Retina.Utility
             return userEx;
         }
 
+        private void NewUser(object sender, NewUserEventArgs e)
+        {
+            Utilities.SendKey(Configuration.Settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleIn]);
+
+            string msg = string.Format("People [{0}] detected, start calibration ...", e.ID);
+            NotifyStatus(msg);
+            Diagnostics.Trace(TraceLevel.Information, msg);
+
+            NIUserInfoEx userEx = CreateUserEx();
+            userEx.User.InTick = DateTime.Now.Ticks;
+            this.usersInScene.Add(e.ID, userEx);
+
+            this.skeletonCapbility.RequestCalibration(e.ID, true);
+        }
+
         private void CalibrationComplete(object sender, CalibrationProgressEventArgs e)
         {
             if (e.Status == CalibrationStatus.OK)
             {
-                string msg = string.Format("people [{0}] calibrated, start tracking ...", e.ID);
-                StatusChanged(this, new StatusEventArgs(msg));
-                Diagnostics.TraceDebug(msg);
+                string msg = string.Format("People [{0}] calibrated, start tracking ...", e.ID);
+                NotifyStatus(msg);
+                Diagnostics.Trace(TraceLevel.Information, msg);
 
                 this.skeletonCapbility.StartTracking(e.ID);
-
-                NIUserInfoEx userEx = CreateUserEx();
-                userEx.User.InTick = DateTime.Now.Ticks;
-                this.usersInScene.Add(e.ID, userEx);
             }
             else if (e.Status != CalibrationStatus.ManualAbort)
             {
-                string msg = string.Format("people [{0}] calibration failed, restart calibration ...", e.ID);
-                StatusChanged(this, new StatusEventArgs(msg));
-                Diagnostics.TraceDebug(msg);
+                string msg = string.Format("People [{0}] calibration failed, restart calibration ...", e.ID);
+                NotifyStatus(msg);
+                Diagnostics.Trace(TraceLevel.Information, msg);
 
                 this.skeletonCapbility.RequestCalibration(e.ID, true);
             }
@@ -261,9 +327,11 @@ namespace Com.Imola.Retina.Utility
 
         private void LostUser(object sender, UserLostEventArgs e)
         {
-            string msg = string.Format("people [{0}] lost", e.ID);
-            StatusChanged(this, new StatusEventArgs(msg));
-            Diagnostics.TraceDebug(msg);
+            Utilities.SendKey(Configuration.Settings.GeneratingSettings.KeyboardMapping[KeyboardTrigger.PeopleOut]);
+
+            string msg = string.Format("People [{0}] lost", e.ID);
+            NotifyStatus(msg);
+            Diagnostics.Trace(TraceLevel.Information, msg);
 
             NIUserInfo user = usersInScene[e.ID].User;
             user.OutTick = DateTime.Now.Ticks;
@@ -360,7 +428,7 @@ namespace Com.Imola.Retina.Utility
                         new Point((int)pos2.X, (int)pos2.Y));
 
         }
-        
+
         private void DrawSkeleton(Graphics g, Color color, int user)
         {
             GetJoints(user);
@@ -394,21 +462,19 @@ namespace Com.Imola.Retina.Utility
         {
             DepthMetaData depthMD = new DepthMetaData();
 
-            while (this.renderTreadTerminate)
+            while (!this.renderTreadTerminate)
             {
                 try
                 {
                     this.context.WaitOneUpdateAll(this.depth);
                 }
-                catch (Exception)
-                {
-                }
+                catch (Exception) { }
 
                 this.depth.GetMetaData(depthMD);
 
                 CalcHist(depthMD);
 
-                lock (this)
+                lock (this.bitmap)
                 {
                     Rectangle rect = new Rectangle(0, 0, this.bitmap.Width, this.bitmap.Height);
                     BitmapData data = this.bitmap.LockBits(rect, ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
@@ -477,33 +543,64 @@ namespace Com.Imola.Retina.Utility
                     g.Dispose();
                 }
 
-                FrameComplete(this, null);
+                NotifyFame();
             }
-        }
-
-        private void StopRenderingWithNoLock()
-        {
-            this.isRendering = false;
-
-            this.renderTreadTerminate = true;
-            this.renderThread.Join();
-        }
-
-        private void StartGeneratingWithNoLock()
-        {
-            this.userGenerator.StartGenerating();
-            isGenerating = true;
         }
 
         private void StatisticsTimerCallback(object state)
         {
             this.statisticsTimer.Change(Timeout.Infinite, Timeout.Infinite);
 
-            StatisticsReady(this, new StatisticsEventArgs(string.Empty));
 
-            this.statisticsTimer.Change(Configuration.STATISTICS_INTERVAL_MS, Timeout.Infinite);
+
+            long peopleCountInScene = 0;
+            long peopleCountInPast = 0;
+
+            if (this.usersInScene != null)
+            {
+                peopleCountInScene = usersInScene.Count;
+            }
+            if (this.usersInPast != null)
+            {
+                peopleCountInPast = usersInPast.Count;
+            }
+
+            string stat = string.Format("{0} People In Scene, {1} People In Past", peopleCountInScene, peopleCountInPast);
+            NotifyStatistics(stat);
+            this.statisticsTimer.Change(Configuration.STATISTICS_TIMER_INTERVAL_MS, Timeout.Infinite);
         }
 
+        #endregion Private Memebers
+
+        public static INIManager CreateInstance()
+        {
+            return new NIManager();
+        }
+
+        public NIManager()
+        { 
+            try
+            {
+                this.settings = Configuration.Settings;
+
+                this.usersInScene = new Dictionary<int, NIUserInfoEx>();
+                this.usersInPast = new List<NIUserInfo>();
+
+                this.renderThread = new Thread(RenderThread);
+
+                this.statisticsTimer = new Timer(StatisticsTimerCallback);
+                this.statisticsTimer.Change(Configuration.STATISTICS_TIMER_INTERVAL_MS, Timeout.Infinite);
+
+                Diagnostics.TraceDebug("NIManager created");
+            }
+            catch (Exception ex)
+            {
+                Diagnostics.Trace(TraceLevel.Error, "NIManager creation failed, {0}", ex.ToString());
+                throw;
+            }
+        }
+
+        
         private bool isGenerating = false;
         private bool isRendering = false;
         private object lockGenerating = new object();
@@ -529,20 +626,18 @@ namespace Com.Imola.Retina.Utility
         private Color[] colors = { Color.Red, Color.Blue, Color.ForestGreen, Color.Yellow, Color.Orange, Color.Purple, Color.White };
         private Color[] anticolors = { Color.Green, Color.Orange, Color.Red, Color.Purple, Color.Blue, Color.Yellow, Color.Black };
         private int ncolors = 6;
+
+        class NIUserInfo
+        {
+            public Guid Id { get; set; }
+            public long InTick { get; set; }
+            public long OutTick { get; set; }
+        }
+
+        class NIUserInfoEx
+        {
+            public NIUserInfo User { get; set; }
+            public Dictionary<SkeletonJoint, SkeletonJointPosition> Joints { get; set; }
+        }
     }
-
-    class NIUserInfo
-    {
-        public Guid Id { get; set; }
-        public long InTick { get; set; }
-        public long OutTick { get; set; }
-    }
-
-    class NIUserInfoEx
-    {
-        public NIUserInfo User { get; set; }
-        public Dictionary<SkeletonJoint, SkeletonJointPosition> Joints { get; set; }
-    }
-
-
 }

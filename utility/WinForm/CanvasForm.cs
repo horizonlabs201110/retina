@@ -11,28 +11,43 @@ namespace Com.Imola.Retina.Utility.WinForm
 {
     public partial class CanvasForm : Form
     {
-        public CanvasForm()
+        public CanvasForm(INIManager manager)
         {
+            
             InitializeComponent();
+
+            niManager = manager;
+            niManager.FrameComplete += new EventHandler(FrameComplete);
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            /*
-            lock (this)
+
+            Bitmap bitmap = niManager.GetFrame();
+            if (bitmap != null)
             {
-                e.Graphics.DrawImage(this.bitmap,
-                    this.CanvasPanel.Location.X,
-                    this.CanvasPanel.Location.Y,
-                    this.CanvasPanel.Size.Width,
-                    this.CanvasPanel.Size.Height);
-            }*/
+                lock (bitmap)
+                {
+                    e.Graphics.DrawImage(bitmap,
+                        this.plCanvas.Location.X,
+                        this.plCanvas.Location.Y,
+                        this.plCanvas.Size.Width,
+                        this.plCanvas.Size.Height);
+                }
+            }
         }
 
         protected override void OnPaintBackground(PaintEventArgs pevent)
         {
             //Don't allow the background to paint
         }
+
+        private void FrameComplete(object sender, EventArgs e)
+        {
+            this.Invalidate();
+        }
+
+        private INIManager niManager = null;
     }
 }

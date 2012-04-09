@@ -11,9 +11,26 @@ namespace Com.Imola.Retina.Utility.WinForm
 {
     public partial class TraceForm : Form
     {
-        public TraceForm()
+        
+        public TraceForm(INIManager manager)
         {
             InitializeComponent();
+
+            niManager = manager;
+            niManager.StatusChanged += new EventHandler(StatusChanged);
+            niManager.StatisticsReady += new EventHandler(StatisticsReady);
         }
+
+        private void StatusChanged(object sender, EventArgs e)
+        {
+            this.tbTrace.AppendText((e as StatusEventArgs).StatusMessage + "\n");
+        }
+
+        private void StatisticsReady(object sender, EventArgs e)
+        {
+            this.llStatistics.Text = (e as StatisticsEventArgs).StatisticsMessage;
+        }
+
+        private INIManager niManager = null;
     }
 }

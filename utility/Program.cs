@@ -13,27 +13,31 @@ namespace Com.Imola.Retina.Utility
         [STAThread]
         static void Main()
         {
-            Diagnostics.Trace(TraceLevel.Information, "Utility started");
+            try
+            {
+                Diagnostics.Trace(TraceLevel.Information, "Utility start");
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
 
-            Application.ApplicationExit += new EventHandler(Application_ApplicationExit);
-            
-            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.Automatic);
-            Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
+                Application.ApplicationExit += new EventHandler(Application_ApplicationExit);
 
-            niManager = NIManager.CreateInstance();
-            Application.Run(new MainForm(niManager));
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.Automatic);
+                Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
+
+                niManager = NIManager.CreateInstance();
+                Application.Run(new MainForm(niManager));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Exit with unhandled error: " + ex.Message, "Utility", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Terminate();
+            }
         }
 
         private static void Application_ApplicationExit(object sender, EventArgs e)
         {
-            if (niManager != null)
-            {
-                niManager.StopGenerating();
-                niManager = null;
-            }
+            Terminate();
             Diagnostics.Trace(TraceLevel.Information, "Utility exit");
         }
 
@@ -42,6 +46,15 @@ namespace Com.Imola.Retina.Utility
             Diagnostics.Trace(TraceLevel.Error, "Unhandled exception encountered, {0}", e.Exception.ToString());
             MessageBox.Show("Exit with unhandled error: " + e.Exception.Message, "Utility", MessageBoxButtons.OK, MessageBoxIcon.Error);
             Application.Exit();
+        }
+
+        private static void Terminate()
+        {
+            if (niManager != null)
+            {
+                niManager.StopGenerating();
+                niManager = null;
+            }
         }
 
         private static INIManager niManager = null;

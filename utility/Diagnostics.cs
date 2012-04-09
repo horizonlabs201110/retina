@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 
 namespace Com.Imola.Retina.Utility
 {
@@ -50,12 +51,25 @@ namespace Com.Imola.Retina.Utility
     class DiagnosticsProvider : IDiagnostics
     {
         public DiagnosticsProvider()
-        { }
+        {
+            swLogPath = Path.Combine(Environment.CurrentDirectory, "utility.log");
+            swLog = new StreamWriter(swLogPath, true, System.Text.Encoding.UTF8);
+        }
 
         #region IDiagnostics
 
         public void Trace(TraceLevel level, string msg, params object[] args)
         {
+            if (level >= Configuration.Settings.DiagnosticsSettings.TraceLevel)
+            {
+                string log =  string.Format("[{0}] [{1}], {2}",
+                    DateTime.Now.ToString(),
+                    level.ToString(),
+                    string.Format(msg, args));
+
+                swLog.WriteLine(log);
+                swLog.Flush();
+            }
             return;
         }
 
@@ -65,5 +79,8 @@ namespace Com.Imola.Retina.Utility
         }
 
         #endregion IDiagnostics
+
+        private StreamWriter swLog = null;
+        private string swLogPath = string.Empty;
     }
 }
